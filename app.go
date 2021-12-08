@@ -15,8 +15,9 @@ type Config struct {
 	CollectConfig `ini:"collect"`
 }
 type KafkaConfig struct {
-	Address string `ini:"address"`
-	Topic   string `ini:"topic"`
+	Address     string `ini:"address"`
+	Topic       string `ini:"topic"`
+	MsgChanSize int    `json:"msg_channel_size"`
 }
 type CollectConfig struct {
 	LogfilePath string `ini:"logfile_path"`
@@ -28,8 +29,7 @@ func main() {
 		return
 	}
 
-	err = kafka.Connect([]string{config.KafkaConfig.Address})
-	defer kafka.Client.Close()
+	err = kafka.Connect([]string{config.KafkaConfig.Address}, config.KafkaConfig.MsgChanSize)
 	if err != nil {
 		return
 	}
@@ -47,11 +47,7 @@ func main() {
 			time.Sleep(time.Second)
 			continue
 		}
-		err := kafka.SendStringDefaultTopic(line.Text)
-		if err != nil {
-			log.Errorf(">>> error of send msg to kafka: %v\n", err)
-			return
-		}
+		kafka.MsgChan <- kafka.BuildMsg(line.Text)
 	}
 }
 
@@ -59,7 +55,7 @@ func buildConfig(filename string) (*Config, error) {
 	ret := new(Config)
 	err := ini.MapTo(ret, filename)
 	if err != nil {
-		log.Error("error of map ini file to struct: %v\n", err)
+		log.Errorf("error of map ini file to struct: %v\n", err)
 		return nil, err
 	}
 	fmt.Printf("%#v\n", ret)
@@ -69,7 +65,7 @@ func buildConfig(filename string) (*Config, error) {
 func loadConfigTest(filename string) error {
 	load, err := ini.Load(filename)
 	if err != nil {
-		log.Error("erro of load config file: %v\n", err)
+		log.Errorf("erro of load config file: %v\n", err)
 		return err
 	}
 	kafkaAddr := load.Section("kafka").Key("address").String()

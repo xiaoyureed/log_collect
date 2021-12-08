@@ -4,14 +4,18 @@ import (
 	"fmt"
 	"github.com/Shopify/sarama"
 	log "github.com/sirupsen/logrus"
+	"time"
 )
 
 // Kafka producer client
-var Client sarama.SyncProducer
+var client sarama.SyncProducer
 
-const TOPIC_DEFAULT_LOG_COLLECT = "log_collect"
+// Buf channel for incoming log
+var MsgChan chan *sarama.ProducerMessage
 
-func Connect(address []string) error {
+const TopicDefaultLogCollect = "log_collect"
+
+func Connect(address []string, chanSize int) error {
 	// producer configuration
 	config := sarama.NewConfig()
 	config.Producer.RequiredAcks = sarama.WaitForAll          // ack
@@ -23,30 +27,67 @@ func Connect(address []string) error {
 		fmt.Println("error of build producer:", err)
 		return err
 	}
-	Client = producer
+	client = producer
+	//defer func() {
+	//	err := client.Close()
+	//	if err != nil {
+	//		log.Errorf(">>> error of close kafka producer: %v\n", err)
+	//	}
+	//}()
 	log.Info("connect kafka success")
+
+	MsgChan = make(chan *sarama.ProducerMessage, chanSize)
+
+	// Read from msg chan and send
+	go func() {
+		for {
+			select {
+			case msg := <-MsgChan:
+				err := sendMsg(msg)
+				if err != nil {
+					log.Errorf(">>> error of send msg to kafka: %v\n", err)
+				}
+				return
+			default:
+			}
+			time.Sleep(time.Second)
+			log.Debug(">>> no msg exist in msg chan ,sleep 1s")
+		}
+	}()
 	return nil
 }
 
-// Send msg to kafka
-func SendString(msg, topic string) error {
-	message := &sarama.ProducerMessage{}
-	message.Topic = topic
-	message.Value = sarama.StringEncoder(msg)
+func BuildMsg(msg string) *sarama.ProducerMessage {
+	return BuildMsgWithTopic(msg, TopicDefaultLogCollect)
+}
 
-	pid, offset, err := Client.SendMessage(message)
+func BuildMsgWithTopic(msg, topic string) *sarama.ProducerMessage {
+	message := sarama.ProducerMessage{
+		Topic: topic,
+		Value: sarama.StringEncoder(msg),
+	}
+	return &message
+}
+
+func sendMsg(msg *sarama.ProducerMessage) error {
+	pid, offset, err := client.SendMessage(msg)
 	if err != nil {
 		fmt.Println("error of send msg: ", err)
 		return err
 	}
 	//fmt.Printf("%v, %v\n", pid, offset)
-	log.Debugf(">>> send success, topic: %v, msg: %v, offset: %v, pid: %v\n", topic, msg, offset, pid)
+	log.Debugf(">>> send success, topic: %v, msg: %v, offset: %v, pid: %v\n", msg.Topic, msg.Value, offset, pid)
 	return nil
+}
+
+// Send msg to kafka
+func SendString(msg, topic string) error {
+	return sendMsg(BuildMsgWithTopic(msg, topic))
 }
 
 // Send string msg to kafka with default topic(log_collect)
 func SendStringDefaultTopic(msg string) error {
-	return SendString(msg, TOPIC_DEFAULT_LOG_COLLECT)
+	return SendString(msg, TopicDefaultLogCollect)
 }
 
 func sendToKafka(msg, topic string) {

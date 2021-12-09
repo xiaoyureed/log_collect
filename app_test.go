@@ -3,8 +3,37 @@ package main
 import (
 	"errors"
 	"fmt"
+	"github.com/Shopify/sarama"
+	perrors "github.com/pkg/errors"
 	"testing"
+	"time"
 )
+
+func TestPkgErrors(t *testing.T) {
+	err := method1()
+	//fmt.Printf("%v\n", err)
+	//fmt.Printf("%q\n", err)
+	fmt.Printf("%+v\n", err)
+
+	err1 := perrors.Cause(err)
+	//fmt.Printf("%v\n", err1)
+	//fmt.Printf("%q\n", err1)
+	fmt.Printf("%+v\n", err1)
+
+}
+
+func method1() error {
+	_, err := doSth("a1")
+	err = perrors.Wrap(err, "wrapped err msg")
+	return err
+}
+
+func TestTime(t *testing.T) {
+	for next := range time.Tick(time.Second * 3) {
+		fmt.Printf("%v\n", next)
+		//2021-12-08 23:24:49.772447 +0800 CST m=+3.004782554
+	}
+}
 
 func TestA(t *testing.T) {
 	err := grandParentMethod("a1")
@@ -27,7 +56,6 @@ func TestA(t *testing.T) {
 		// unwrap3: <nil>
 	}
 }
-
 
 type flagErr struct {
 	Msg string
@@ -71,5 +99,32 @@ func doSth(flag string) (string, error) {
 		return "hello", err
 	}
 	return flag, nil
+}
+
+
+func TestSendToKafka(t *testing.T) {
+	// producer configuration
+	config := sarama.NewConfig()
+	config.Producer.RequiredAcks = sarama.WaitForAll          // ack
+	config.Producer.Partitioner = sarama.NewRandomPartitioner //partition
+	config.Producer.Return.Successes = true                   //确认
+
+	producer, err := sarama.NewSyncProducer([]string{"127.0.0.1:9092"}, config)
+	if err != nil {
+		fmt.Println("error of build producer:", err)
+		return
+	}
+	defer producer.Close()
+
+	message := &sarama.ProducerMessage{}
+	message.Topic = "topic_test"
+	message.Value = sarama.StringEncoder("hahaha")
+
+	pid, offset, err := producer.SendMessage(message)
+	if err != nil {
+		fmt.Println("error of send msg: ", err)
+		return
+	}
+	fmt.Printf("%v, %v\n", pid, offset)
 }
 

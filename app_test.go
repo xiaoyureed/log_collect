@@ -1,13 +1,151 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/Shopify/sarama"
 	perrors "github.com/pkg/errors"
+	"go.etcd.io/etcd/api/v3/v3rpc/rpctypes"
+	clientv3 "go.etcd.io/etcd/client/v3"
+	"log"
+	"sync"
 	"testing"
 	"time"
 )
+
+type Atype struct {}
+
+func (a Atype) Close() error {
+	return errors.New("error off close")
+}
+
+func TestDefer(t *testing.T) {
+
+	f := func(a Atype) (err error) {
+		defer func() {
+			// err 变量赋值会创建一个全新的变量, 不再是返回值定义中的 err 了
+			// 若希望 defer 中的错误被返回回去, 使用 = 不要使用 :=
+			if err := a.Close(); err != nil {
+
+			}
+		}()
+		return
+	}
+	err := f(Atype{})
+	if err != nil {
+		log.Printf("%v\n", err)
+	}
+}
+
+func TestKafkaConsume(t *testing.T) {
+	consumer, err := sarama.NewConsumer([]string{"localhost:2379"}, nil)
+	if err != nil {
+		log.Fatalf("error of new consumer: %v\n", err)
+	}
+	config, _ := buildConfig("./config.ini")
+
+	partitions, err := consumer.Partitions(config.KafkaConfig.Topic)
+	for partition := range partitions {
+		pc, _ := consumer.ConsumePartition(
+			config.KafkaConfig.Topic,
+			int32(partition), // partition number
+			sarama.OffsetNewest, // 从最新标志位开始读
+		)
+		defer pc.AsyncClose()
+	}
+}
+
+func TestWaitGroup(t *testing.T) {
+	var wg sync.WaitGroup
+	wg.Add(1)
+	defer func() {
+		println("wait")
+		wg.Wait()
+	}()
+	go func() {
+		for true {
+			select {
+			// 永远无法结束, 因为存在 default 分支, select 变为非阻塞, 会有多次循环,每次for循环, 都会新建一个 after channel, 永远不会 timeout
+			case <-time.After(time.Second * 2):
+				println("timeout")
+				wg.Done()
+				//default:
+
+			}
+		}
+	}()
+}
+
+func TestEtcdClient(t *testing.T) {
+
+	client, err := clientv3.New(clientv3.Config{
+		Endpoints:   []string{"localhost:2379"},
+		DialTimeout: time.Second * 5,
+	})
+	if err != nil {
+		fmt.Printf(">>> %v\n", err)
+		return
+	}
+	defer client.Close()
+	log.Println(">>> connect etcd ok")
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	defer func() {
+		println("wait")
+		wg.Wait()
+	}()
+	go func() {
+		// 可以监控不存在的 key
+		watch := client.Watch(context.Background(), "bb")
+		after := time.After(time.Second * 2)
+		for {
+			select {
+			case response := <-watch:
+				for _, event := range response.Events {
+					log.Printf("type: %v, key: %s, value: %s\n", event.Type, event.Kv.Key, event.Kv.Value)
+				}
+			case <-after:
+				log.Println("timeout")
+				wg.Done()
+			default:
+				println("default...")
+			}
+		}
+	}()
+
+	timeout, cancelFunc := context.WithTimeout(context.Background(), time.Second)
+	defer cancelFunc()
+	// if the key already exist, old value will be covered by new value
+	put, err := client.Put(timeout, "bb", "bb1")
+	if err != nil {
+		switch err {
+		case context.Canceled:
+			log.Fatalf("ctx is canceled by another routine: %v", err)
+		case context.DeadlineExceeded:
+			log.Fatalf("ctx is attached with a deadline is exceeded: %v", err)
+		case rpctypes.ErrEmptyKey:
+			log.Fatalf("client-side error: %v", err)
+		default:
+			log.Fatalf("bad cluster endpoints, which are not etcd servers: %v", err)
+		}
+		return
+	}
+
+	log.Printf(">>> put ok, resp: %v\n", put)
+
+	timeout, cancelFunc = context.WithTimeout(context.Background(), time.Second)
+	defer cancelFunc()
+	get, err := client.Get(timeout, "aa")
+	if err != nil {
+		log.Fatalf(">>> %v\n", err)
+	}
+	for _, ele := range get.Kvs {
+		log.Printf(">>> key: %s, value: %s\n", ele.Key, ele.Value)
+	}
+
+}
 
 func TestPkgErrors(t *testing.T) {
 	err := method1()
@@ -101,7 +239,6 @@ func doSth(flag string) (string, error) {
 	return flag, nil
 }
 
-
 func TestSendToKafka(t *testing.T) {
 	// producer configuration
 	config := sarama.NewConfig()
@@ -127,4 +264,3 @@ func TestSendToKafka(t *testing.T) {
 	}
 	fmt.Printf("%v, %v\n", pid, offset)
 }
-

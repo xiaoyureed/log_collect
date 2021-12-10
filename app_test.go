@@ -39,20 +39,32 @@ func TestDefer(t *testing.T) {
 }
 
 func TestKafkaConsume(t *testing.T) {
-	consumer, err := sarama.NewConsumer([]string{"localhost:2379"}, nil)
+	config, _ := buildConfig("./config.ini")
+
+	consumer, err := sarama.NewConsumer([]string{config.KafkaConfig.Address}, nil)
 	if err != nil {
 		log.Fatalf("error of new consumer: %v\n", err)
 	}
-	config, _ := buildConfig("./config.ini")
 
 	partitions, err := consumer.Partitions(config.KafkaConfig.Topic)
 	for partition := range partitions {
 		pc, _ := consumer.ConsumePartition(
 			config.KafkaConfig.Topic,
 			int32(partition), // partition number
-			sarama.OffsetNewest, // 从最新标志位开始读
+			//sarama.OffsetNewest, // 从最新标志位开始读
+			sarama.OffsetOldest , // 从最老开始读
 		)
 		defer pc.AsyncClose()
+
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func(pc sarama.PartitionConsumer) {
+			for message := range pc.Messages() {
+				log.Printf(">>> receive msg, partition: %v, offset: %v, key: %s, value:%s\n",
+					message.Partition, message.Offset, message.Key, message.Value)
+			}
+		}(pc)
+		wg.Wait()
 	}
 }
 

@@ -1,11 +1,14 @@
 package main
 
 import (
+	"fmt"
 	"github.com/go-ini/ini"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"os"
+	"strings"
 	"time"
+	"xiaoyureed.github.io/log_collection/etcd"
 	"xiaoyureed.github.io/log_collection/kafka"
 	"xiaoyureed.github.io/log_collection/tailf"
 )
@@ -14,6 +17,7 @@ import (
 type Config struct {
 	KafkaConfig   KafkaConfig `ini:"kafka"`
 	CollectConfig `ini:"collect"`
+	EtcdConfig    `ini:"etcd"`
 }
 type KafkaConfig struct {
 	Address     string `ini:"address"`
@@ -22,6 +26,10 @@ type KafkaConfig struct {
 }
 type CollectConfig struct {
 	LogfilePath string `ini:"logfile_path"`
+}
+type EtcdConfig struct {
+	Address             string `ini:"address"`
+	ConfigKeyLogCollect string `ini:"config_key_log_collect"`
 }
 
 func main() {
@@ -39,13 +47,23 @@ func main() {
 		return
 	}
 
+	err = etcd.Init([]string{config.EtcdConfig.Address})
+	if err != nil {
+		log.Fatalf(">>> %v\n", err)
+	}
+	confLogCollect, err := etcd.GetConf(config.EtcdConfig.ConfigKeyLogCollect)
+	if err != nil {
+		log.Fatalf(">>> %v\n", err)
+	}
+	fmt.Printf("%v\n", confLogCollect)
+
+
 	filename := config.CollectConfig.LogfilePath
 	err = tailf.Init(filename)
 	if err != nil {
 		log.Errorf(">>> %v\n", err)
 		return
 	}
-
 	for {
 		line, ok := <-tailf.TailObj.Lines
 		if !ok {
@@ -53,6 +71,17 @@ func main() {
 			time.Sleep(time.Second)
 			continue
 		}
+
+		// trim spaces and \r\n
+		//https://stackoverflow.com/questions/44448384/how-remove-n-from-lines
+		lineTrim := strings.TrimFunc(strings.TrimSpace(line.Text), func(r rune) bool {
+			return r == '\r' || r == '\n'
+		})
+		if len(lineTrim) == 0 {
+			log.Debugln(">>> empty line")
+			continue
+		}
+
 		msg := kafka.BuildMsg(line.Text)
 		kafka.MsgChan <- msg
 		log.Debugf(">>> send msg to msg chan ok: %v\n", msg)

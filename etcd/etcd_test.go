@@ -2,27 +2,27 @@ package etcd
 
 import "testing"
 
-func TestGetConf(t *testing.T) {
-	entries := []*CollectEntry{
-		{
-			Path:  "aa",
-			Topic: "bb",
-		},
+func TestSetupConfig(t *testing.T) {
+	service, _ := NewService([]string{"127.0.0.1:2379"})
+	err := service.PutCollectEntries("log_collect_config", []*CollectEntry{
+		{Path: "./xxx.log", Topic: "log_collect"},
+	})
+	if err != nil {
+		t.Fatalf("%v\n", err)
 	}
+}
 
-	err := Init([]string{"127.0.0.1:2379"})
+func TestGetConf(t *testing.T) {
+
+	service, err := NewService([]string{"127.0.0.1:2379"})
 	if err != nil {
 		t.Fatalf("%v\n", err)
 	}
-	err = PutConf("aa", entries)
+	entries, err := service.GetCollectEntries("log_collect_config")
 	if err != nil {
 		t.Fatalf("%v\n", err)
 	}
-	conf, err := GetConf("aa")
-	if err != nil {
-		t.Fatalf("%v\n", err)
-	}
-	for _, ele := range conf {
+	for _, ele := range entries {
 		t.Log(ele.Path, ele.Topic)
 	}
 }

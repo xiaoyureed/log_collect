@@ -10,28 +10,29 @@ import (
 	"time"
 )
 
-var client *clientv3.Client
 
-// Init connect etcd with the given endpoints
-func Init(endpoints []string) error {
-	cli, err := clientv3.New(clientv3.Config{
+type Service struct {
+	client *clientv3.Client
+}
+
+// NewService connect etcd with the given endpoints
+func NewService(endpoints []string) (*Service, error) {
+	client, err := clientv3.New(clientv3.Config{
 		Endpoints:   endpoints,
 		DialTimeout: time.Second * 5,
 	})
 	if err != nil {
 		//log.Fatalf(">>> %v\n", err)
-		return perrors.Wrapf(err, "error of new etcd client v3, endpoints: %v", endpoints)
+		return nil, perrors.Wrapf(err, "error of new etcd client v3, endpoints: %v", endpoints)
 	}
-	client = cli
-
 	//defer client.Close()
 
-	log.Println(">>> connect etcd ok")
-	return nil
+	log.Println(">>> new etcd service ok")
+	return &Service{client: client}, nil
 }
 
-// PutConf put key value pair into etcd
-func PutConf(key string, entries []*CollectEntry) error {
+// PutCollectEntries put key value pair into etcd
+func (s Service) PutCollectEntries(key string, entries []*CollectEntry) error {
 	value, err := json.Marshal(entries)
 	if err != nil {
 		return perrors.Wrapf(err, "error of marshal obj to json string, entries: %v", entries)
@@ -39,14 +40,14 @@ func PutConf(key string, entries []*CollectEntry) error {
 
 	timeout, cancelFunc := context.WithTimeout(context.Background(), time.Second*2)
 	defer cancelFunc()
-	_, err = client.Put(timeout, key, string(value))
+	_, err = s.client.Put(timeout, key, string(value))
 	if err != nil {
 		return perrors.Wrapf(err, "error of put, key: %s, value: %s", key, value)
 	}
 	return nil
 }
 
-// CollectEntry 表示日志收集项
+// CollectEntry represent a log collection item, every business line has a topic
 type CollectEntry struct {
 	// Path 表示日志文件路径
 	Path  string `json:"path"`
@@ -54,18 +55,17 @@ type CollectEntry struct {
 	Topic string `json:"topic"`
 }
 
-// KeyNotFoundError represent an error that cannot value from etcd by the specified key
+// KeyNotFoundError represent an error that cannot get value from etcd by the specified key
 type KeyNotFoundError string
 
 func (e KeyNotFoundError) Error() string {
 	return string(e)
 }
 
-// GetConf get config from etcd
-func GetConf(key string) ([]*CollectEntry, error) {
+func (s Service) GetCollectEntries(key string) ([]*CollectEntry, error) {
 	timeout, cancelFunc := context.WithTimeout(context.Background(), time.Second*2)
 	defer cancelFunc()
-	getResp, err := client.Get(timeout, key)
+	getResp, err := s.client.Get(timeout, key)
 	if err != nil {
 		return nil, perrors.Wrapf(err, "error of get key '%v'", key)
 	}
@@ -75,12 +75,13 @@ func GetConf(key string) ([]*CollectEntry, error) {
 	}
 
 	kv := getResp.Kvs[0]
-	log.Debugf(">>> GetConf(%s): %s\n", kv.Key, kv.Value)
+	log.Debugf(">>>etcd get entries ok:  %s\n", kv.Value)
 
 	var collectEntries []*CollectEntry
 	err = json.Unmarshal(kv.Value, &collectEntries)
 	if err != nil {
-		return nil, perrors.Wrapf(err, "error of parse json string: %s", kv.Value)
+		return nil, perrors.Wrapf(err, "error of parse value: %s", kv.Value)
 	}
 	return collectEntries, nil
 }
+

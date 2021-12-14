@@ -1,38 +1,40 @@
 package main
 
 import (
-	"fmt"
 	"github.com/go-ini/ini"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"os"
 	"strings"
+	"sync"
 	"time"
 	"xiaoyureed.github.io/log_collection/etcd"
 	"xiaoyureed.github.io/log_collection/kafka"
 	"xiaoyureed.github.io/log_collection/tailf"
 )
 
-// 全局配置 struct
+// Config represent a global config model
 type Config struct {
 	KafkaConfig   KafkaConfig `ini:"kafka"`
-	CollectConfig `ini:"collect"`
+	//CollectConfig `ini:"collect"`
 	EtcdConfig    `ini:"etcd"`
 }
+
+// KafkaConfig is a kafka config model
 type KafkaConfig struct {
 	Address     string `ini:"address"`
 	Topic       string `ini:"topic"`
 	MsgChanSize int    `ini:"msg_channel_size" `
 }
-type CollectConfig struct {
-	LogfilePath string `ini:"logfile_path"`
-}
+
+//EtcdConfig is a etcd config model
 type EtcdConfig struct {
 	Address             string `ini:"address"`
 	ConfigKeyLogCollect string `ini:"config_key_log_collect"`
 }
 
 func main() {
+
 	setupLog()
 
 	config, err := buildConfig("./config.ini")
@@ -41,51 +43,63 @@ func main() {
 		return
 	}
 
-	err = kafka.Connect([]string{config.KafkaConfig.Address}, config.KafkaConfig.MsgChanSize)
+	serviceEtcd, err := etcd.NewService([]string{config.EtcdConfig.Address})
+	if err != nil {
+		log.Fatalf(">>> %v\n", err)
+	}
+	entries, err := serviceEtcd.GetCollectEntries(config.EtcdConfig.ConfigKeyLogCollect)
+	if err != nil {
+		log.Fatalf(">>> %v\n", err)
+	}
+
+	serviceTailf, err := tailf.NewService(entries)
 	if err != nil {
 		log.Errorf(">>> %v\n", err)
 		return
 	}
 
-	err = etcd.Init([]string{config.EtcdConfig.Address})
-	if err != nil {
-		log.Fatalf(">>> %v\n", err)
-	}
-	confLogCollect, err := etcd.GetConf(config.EtcdConfig.ConfigKeyLogCollect)
-	if err != nil {
-		log.Fatalf(">>> %v\n", err)
-	}
-	fmt.Printf("%v\n", confLogCollect)
+	var wg sync.WaitGroup
 
+	for _, ele := range serviceTailf.TailTasks() {
+		ele := ele
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
 
-	filename := config.CollectConfig.LogfilePath
-	err = tailf.Init(filename)
-	if err != nil {
-		log.Errorf(">>> %v\n", err)
-		return
+			serviceKafka, err := kafka.NewService([]string{config.KafkaConfig.Address}, config.KafkaConfig.MsgChanSize)
+			if err != nil {
+				log.Errorf(">>> %v\n", err)
+				return
+			}
+			for {
+				line, ok := <-ele.Tail.Lines
+				if !ok {
+					log.Infof(">>> tail file closed, sleep 1s, filename: %v\n", ele.Tail.Filename)
+					time.Sleep(time.Second)
+					continue
+				}
+
+				// trim spaces and \r\n
+				//https://stackoverflow.com/questions/44448384/how-remove-n-from-lines
+				lineTrim := strings.TrimFunc(strings.TrimSpace(line.Text), func(r rune) bool {
+					return r == '\r' || r == '\n'
+				})
+				if len(lineTrim) == 0 {
+					log.Debugln(">>> empty line")
+					continue
+				}
+
+				serviceKafka.PutWithDefaultTopic(line.Text)
+				log.Debugf(">>> send msg to msg chan ok: %v\n", line.Text)
+			}
+
+		}()
 	}
-	for {
-		line, ok := <-tailf.TailObj.Lines
-		if !ok {
-			log.Infof(">>> tail file closed, sleep 1s, filename: %v\n", filename)
-			time.Sleep(time.Second)
-			continue
-		}
 
-		// trim spaces and \r\n
-		//https://stackoverflow.com/questions/44448384/how-remove-n-from-lines
-		lineTrim := strings.TrimFunc(strings.TrimSpace(line.Text), func(r rune) bool {
-			return r == '\r' || r == '\n'
-		})
-		if len(lineTrim) == 0 {
-			log.Debugln(">>> empty line")
-			continue
-		}
+	log.Debugln("waiting for reading log...")
+	wg.Wait()
 
-		msg := kafka.BuildMsg(line.Text)
-		kafka.MsgChan <- msg
-		log.Debugf(">>> send msg to msg chan ok: %v\n", msg)
-	}
+	log.Debugln("main end -------")
 }
 
 func setupLog() {

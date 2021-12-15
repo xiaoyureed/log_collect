@@ -1,24 +1,32 @@
 package etcd
 
-import "testing"
+import (
+	"testing"
+	"xiaoyureed.github.io/log_collection/global"
+)
 
 func TestSetupConfig(t *testing.T) {
 	service, _ := NewService([]string{"127.0.0.1:2379"})
 	err := service.PutCollectEntries("log_collect_config", []*CollectEntry{
 		{Path: "./xxx.log", Topic: "log_collect"},
+		//{Path: "./config.ini", Topic: "log_collect"},
 	})
 	if err != nil {
 		t.Fatalf("%v\n", err)
 	}
 }
 
-func TestGetConf(t *testing.T) {
+func TestWatch(t *testing.T) {
+	conf := global.Config("../config.ini")
+	service, _ := NewService([]string{conf.EtcdConfig.Address})
+	service.watchCollectEntries(conf.EtcdConfig.ConfigKeyLogCollect)
+}
 
-	service, err := NewService([]string{"127.0.0.1:2379"})
-	if err != nil {
-		t.Fatalf("%v\n", err)
-	}
-	entries, err := service.GetCollectEntries("log_collect_config")
+func TestGetConf(t *testing.T) {
+	conf := global.Config("../config.ini")
+	service, _ := NewService([]string{conf.EtcdConfig.Address})
+	entries, err := service.GetCollectEntries(conf.EtcdConfig.ConfigKeyLogCollect)
+
 	if err != nil {
 		t.Fatalf("%v\n", err)
 	}

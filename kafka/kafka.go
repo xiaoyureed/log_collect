@@ -2,7 +2,6 @@ package kafka
 
 import (
 	"github.com/Shopify/sarama"
-	perrors "github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -25,7 +24,7 @@ func (s Service) Put(msg, topic string) {
 	s.msgChan <- buildMsg(msg, topic)
 }
 
-func NewService(address []string, chanSize int) (*Service, error) {
+func NewService(address []string, chanSize int) *Service {
 	// producer configuration
 	config := sarama.NewConfig()
 	config.Producer.RequiredAcks = sarama.WaitForAll          // ack
@@ -34,7 +33,7 @@ func NewService(address []string, chanSize int) (*Service, error) {
 
 	producer, err := sarama.NewSyncProducer(address, config)
 	if err != nil {
-		return nil, perrors.Wrap(err, "error of build sync producer")
+		log.Fatalf(">>>kafka, error of create sync producer, err: %v", err)
 	}
 
 	log.Info(">>> connect kafka ok")
@@ -42,7 +41,7 @@ func NewService(address []string, chanSize int) (*Service, error) {
 	msgChan := make(chan *sarama.ProducerMessage, chanSize)
 	log.Debugf(">>> make msg chan ok, size: %d\n", chanSize)
 
-	// Read from msg chan and send
+	// Read from msg chan and send to kafka
 	go func() {
 		for {
 			select {
@@ -51,11 +50,11 @@ func NewService(address []string, chanSize int) (*Service, error) {
 
 				partitionId, offset, err := producer.SendMessage(msg)
 				if err != nil {
-					log.Errorf("%v\n", err)
+					log.Errorf(">>>kafka, error of send msg to kafka %v\n", err)
 					_ = producer.Close()
 					return
 				}
-				log.Debugf(">>> send msg ok, offset: %v, pid: %v,  msg: %v\n", offset, partitionId, msg)
+				log.Debugf(">>>kafka, send msg ok, offset: %v, pid: %v,  msg: %v\n", offset, partitionId, msg)
 
 				//default:
 			}
@@ -64,7 +63,7 @@ func NewService(address []string, chanSize int) (*Service, error) {
 		}
 	}()
 
-	return &Service{client: producer, msgChan: msgChan}, nil
+	return &Service{client: producer, msgChan: msgChan}
 }
 
 func buildMsgWithDefaultTopic(msg string) *sarama.ProducerMessage {

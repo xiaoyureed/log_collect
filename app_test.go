@@ -12,6 +12,29 @@ import (
 	"time"
 )
 
+func TestChanReturn(t *testing.T) {
+	f := func() <-chan int {
+		ch := make(chan int)
+		go func() {
+			tick := time.Tick(time.Second)
+			i := 0
+			for {
+				select {
+				case <-tick:
+					ch <- i
+					i++
+				}
+			}
+		}()
+
+		return ch
+	}
+	ch := f()
+	for ele := range ch {
+		t.Log(ele)
+	}
+}
+
 func TestKafkaConsume(t *testing.T) {
 	config, _ := buildConfig("./config.ini")
 

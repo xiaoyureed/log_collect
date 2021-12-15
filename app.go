@@ -89,7 +89,8 @@ func main() {
 					continue
 				}
 
-				serviceKafka.PutWithDefaultTopic(line.Text)
+				//serviceKafka.PutWithDefaultTopic(line.Text)
+				serviceKafka.Put(line.Text, ele.Topic)
 				log.Debugf(">>> send msg to msg chan ok: %v\n", line.Text)
 			}
 
@@ -126,7 +127,7 @@ func buildConfig(filename string) (*Config, error) {
 
 	//fmt.Printf()
 	log.Info(">>> build config ok")
-	log.Debugf("%#v\n", ret)
+	log.Debugf("%+v\n", ret)
 
 	return ret, nil
 }

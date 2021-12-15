@@ -68,6 +68,7 @@ func NewService(address []string, chanSize int) (*Service, error) {
 }
 
 func buildMsgWithDefaultTopic(msg string) *sarama.ProducerMessage {
+	log.Debugf(">>> the default topic (%v) is used.\n", TopicDefaultLogCollect)
 	return buildMsg(msg, TopicDefaultLogCollect)
 }
 
@@ -76,5 +77,6 @@ func buildMsg(msg, topic string) *sarama.ProducerMessage {
 		Topic: topic,
 		Value: sarama.StringEncoder(msg),
 	}
+	log.Debugf(">>> build msg ok, msg: %v, topic: %v\n", msg, topic)
 	return &message
 }

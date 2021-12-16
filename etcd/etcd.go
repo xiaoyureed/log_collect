@@ -104,6 +104,11 @@ func (s Service) watchCollectEntries(key string) <-chan []*CollectEntry {
 			for _, ele := range resp.Events {
 				log.Debugf(">>>etcd collect log config changed, event type: %v, value: %s", ele.Type.String(), ele.Kv.Value)
 
+				if ele.Type == clientv3.EventTypeDelete {
+					watchEntries <- []*CollectEntry{}
+					continue
+				}
+
 				entries, err := toEntries(ele.Kv.Value)
 				if err != nil {
 					log.Errorf("%v", err)

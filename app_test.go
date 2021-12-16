@@ -10,7 +10,34 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"xiaoyureed.github.io/log_collection/global"
 )
+
+func TestChanBlock(t *testing.T) {
+	f := func() <-chan int {
+		ret := make(chan int)
+		go func() {
+			tick := time.Tick(time.Second)
+			after := time.After(time.Second * 3)
+			i := 0
+			for {
+				select {
+				case <-tick:
+					ret <- i
+					i++
+				case <-after:
+					close(ret)
+
+				}
+			}
+		}()
+		return ret
+	}
+	ints := f()
+	for i := range ints {
+		log.Println(i)
+	}
+}
 
 func TestChanReturn(t *testing.T) {
 	f := func() <-chan int {
@@ -36,7 +63,7 @@ func TestChanReturn(t *testing.T) {
 }
 
 func TestKafkaConsume(t *testing.T) {
-	config, _ := buildConfig("./config.ini")
+	config := global.Config("./config.ini")
 
 	consumer, err := sarama.NewConsumer([]string{config.KafkaConfig.Address}, nil)
 	if err != nil {

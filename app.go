@@ -28,7 +28,7 @@ func main() {
 	serviceKafka := kafka.NewService([]string{conf.KafkaConfig.Address}, conf.KafkaConfig.MsgChanSize)
 
 	serviceTailf.Start(serviceKafka)
-	serviceTailf.WatchNewEntries(newEntries)
+	serviceTailf.WatchNewEntries(newEntries, serviceKafka)
 
 	select {
 

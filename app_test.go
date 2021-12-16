@@ -7,11 +7,43 @@ import (
 	"go.etcd.io/etcd/api/v3/v3rpc/rpctypes"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"log"
+	"net"
 	"sync"
 	"testing"
 	"time"
+	"xiaoyureed.github.io/log_collection/etcd"
 	"xiaoyureed.github.io/log_collection/global"
 )
+
+func TestNet(t *testing.T) {
+	dial, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer dial.Close()
+
+	addr := dial.LocalAddr()
+	fmt.Println(addr)
+	udpAddr := addr.(*net.UDPAddr)
+	fmt.Println(udpAddr.IP.String())
+
+	println("------------------------")
+
+	addrs, _ := net.InterfaceAddrs()
+	for _, addr := range addrs {
+		ip, ok := addr.(*net.IPNet)
+		if !ok {
+			continue
+		}
+		if ip.IP.IsLoopback() {
+			continue
+		}
+		if ip.IP.IsGlobalUnicast() {
+			continue
+		}
+		println(ip.IP.String())
+	}
+}
 
 func TestChanBlock(t *testing.T) {
 	f := func() <-chan int {
@@ -65,15 +97,19 @@ func TestChanReturn(t *testing.T) {
 func TestKafkaConsume(t *testing.T) {
 	config := global.Config("./config.ini")
 
+	entries, _ := etcd.NewService([]string{config.EtcdConfig.Address}).GetCollectEntries(config.EtcdConfig.ConfigKeyLogCollect)
+
+	topic := entries[0].Topic
+
 	consumer, err := sarama.NewConsumer([]string{config.KafkaConfig.Address}, nil)
 	if err != nil {
 		log.Fatalf("error of new consumer: %v\n", err)
 	}
 
-	partitions, err := consumer.Partitions(config.KafkaConfig.Topic)
+	partitions, err := consumer.Partitions(topic)
 	for partition := range partitions {
 		pc, _ := consumer.ConsumePartition(
-			config.KafkaConfig.Topic,
+			topic,
 			int32(partition), // partition number
 			//sarama.OffsetNewest, // 从最新标志位开始读
 			sarama.OffsetOldest , // 从最老开始读

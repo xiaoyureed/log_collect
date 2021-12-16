@@ -36,6 +36,7 @@ func main() {
 
 }
 
+
 func setupLog() {
 	formatter := new(log.TextFormatter)
 	formatter.FullTimestamp = true

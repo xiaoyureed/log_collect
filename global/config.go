@@ -1,8 +1,10 @@
 package global
 
 import (
+	"fmt"
 	"github.com/go-ini/ini"
 	log "github.com/sirupsen/logrus"
+	"net"
 	"sync"
 )
 
@@ -12,14 +14,12 @@ var locker sync.Mutex
 // Config represent a global config model
 type config struct {
 	KafkaConfig kafkaConfig `ini:"kafka"`
-	//CollectConfig `ini:"collect"`
 	EtcdConfig etcdConfig `ini:"etcd"`
 }
 
 // kafkaConfig is a kafka config model
 type kafkaConfig struct {
 	Address     string `ini:"address"`
-	Topic       string `ini:"topic"`
 	MsgChanSize int    `ini:"msg_channel_size" `
 }
 
@@ -51,5 +51,21 @@ func Config(filename string) *config {
 	log.Info(">>> build config ok")
 	log.Debugf("%+v\n", *conf)
 
+	configKey := fmt.Sprintf(conf.EtcdConfig.ConfigKeyLogCollect, ipString())
+	log.Debugf("resolve config key: %v", configKey)
+
+	conf.EtcdConfig.ConfigKeyLogCollect = configKey
+
 	return conf
+}
+
+
+func ipString() string {
+	dial, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		log.Fatalf("error of get local ip, err:%v", err)
+	}
+	defer dial.Close()
+	addr := dial.LocalAddr().(*net.UDPAddr)
+	return addr.IP.String()
 }

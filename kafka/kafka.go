@@ -1,6 +1,7 @@
 package kafka
 
 import (
+	"encoding/json"
 	"github.com/Shopify/sarama"
 	log "github.com/sirupsen/logrus"
 )
@@ -78,4 +79,56 @@ func buildMsg(msg, topic string) *sarama.ProducerMessage {
 	}
 	log.Debugf(">>> build msg ok, msg: %v, topic: %v\n", msg, topic)
 	return &message
+}
+
+//为日志 transfer 准备的 service
+type TransferService struct {
+	consumer sarama.Consumer
+}
+
+func NewTransferService(addrs []string) *TransferService {
+	consumer, err := sarama.NewConsumer(addrs, nil)
+	if err != nil {
+		log.Fatalf("error of create consumer, err: %v\n", err)
+	}
+	//partitions, err := consumer.Partitions()
+	//if err != nil {
+	//	log.Fatalf("error of get partitons by consumer with topic %v, err: %v\n", )
+	//}
+	return &TransferService{consumer: consumer}
+}
+
+//从 kafka 中消费, 消息发往返回的 channel 中
+func (t *TransferService) Consume(topic string, chanSize int) <-chan map[string]interface{} {
+	ret := make(chan map[string]interface{}, chanSize)
+
+	partitions, err := t.consumer.Partitions(topic)
+	if err != nil {
+		log.Fatalf("error of get partitons by consumer with topic %v, err: %v\n", topic, err)
+	}
+	for _, partition := range partitions {
+		partitionConsumer, err := t.consumer.ConsumePartition(topic, partition, sarama.OffsetOldest)
+		if err != nil {
+			log.Fatalf("error of get partition consumer, topic: %v, err: %v\n", topic, err)
+		}
+
+		messages := partitionConsumer.Messages()
+		go func() {
+			defer partitionConsumer.AsyncClose()
+
+			for msg := range messages {
+				m := make(map[string]interface{})
+				err := json.Unmarshal(msg.Value, &m)
+				if err != nil {
+					log.Warnf("error of unmarshal to a map, this msg will be ignored, target: %s, err: %v\n", msg.Value, err)
+					continue
+				}
+
+				ret <- m
+			}
+		}()
+
+	}
+
+	return ret
 }

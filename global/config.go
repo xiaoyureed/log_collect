@@ -15,6 +15,11 @@ var locker sync.Mutex
 type config struct {
 	KafkaConfig kafkaConfig `ini:"kafka"`
 	EtcdConfig etcdConfig `ini:"etcd"`
+	EsConfig esConfig `ini:"es"`
+}
+
+type esConfig struct {
+	Url string `ini:"url"`
 }
 
 // kafkaConfig is a kafka config model

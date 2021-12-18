@@ -4,12 +4,57 @@ import (
 	"fmt"
 	"github.com/Shopify/sarama"
 	log "github.com/sirupsen/logrus"
+	"strconv"
 	"sync"
 	"testing"
+	"time"
 	"xiaoyureed.github.io/log_collection/etcd"
 	"xiaoyureed.github.io/log_collection/global"
 	"xiaoyureed.github.io/log_collection/kafka"
 )
+
+func TestSingle(t *testing.T) {
+	type Single struct {
+
+	}
+
+	var once sync.Once
+	f := func() *Single {
+		var ret *Single
+		once.Do(func() {
+			println("create")
+			ret = &Single{}
+		})
+		return ret
+	}
+
+	for i := 0; i < 5; i++ {
+		single := f()
+		fmt.Println(single)
+	}
+	time.Sleep(time.Second)
+}
+
+func MultiTask() string {
+	runTask := func(i int) string {
+		time.Sleep(time.Second)
+		return strconv.Itoa(i)
+	}
+
+	ret := make(chan string)
+
+	taskNum := 3
+	for i := 0; i < taskNum; i++ {
+		go func(i int) {
+			ret <- runTask(i)
+		}(i)
+	}
+	return <-ret
+}
+
+func TestMethod1(t *testing.T) {
+
+}
 
 func TestKafkaConsume(t *testing.T) {
 	conf := global.Config("../config.ini")

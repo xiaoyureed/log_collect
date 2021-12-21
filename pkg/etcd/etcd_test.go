@@ -2,7 +2,7 @@ package etcd
 
 import (
 	"testing"
-	"xiaoyureed.github.io/log_collection/global"
+	"xiaoyureed.github.io/log_collection/pkg/global"
 )
 
 func TestSetupConfig(t *testing.T) {

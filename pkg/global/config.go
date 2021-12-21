@@ -14,8 +14,8 @@ var locker sync.Mutex
 // Config represent a global config model
 type config struct {
 	KafkaConfig kafkaConfig `ini:"kafka"`
-	EtcdConfig etcdConfig `ini:"etcd"`
-	EsConfig esConfig `ini:"es"`
+	EtcdConfig  etcdConfig  `ini:"etcd"`
+	EsConfig    esConfig    `ini:"es"`
 }
 
 type esConfig struct {

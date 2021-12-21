@@ -3,10 +3,10 @@ package main
 import (
 	log "github.com/sirupsen/logrus"
 	"os"
-	"xiaoyureed.github.io/log_collection/etcd"
-	"xiaoyureed.github.io/log_collection/global"
-	"xiaoyureed.github.io/log_collection/kafka"
-	"xiaoyureed.github.io/log_collection/tailf"
+	"xiaoyureed.github.io/log_collection/pkg/etcd"
+	"xiaoyureed.github.io/log_collection/pkg/global"
+	"xiaoyureed.github.io/log_collection/pkg/kafka"
+	"xiaoyureed.github.io/log_collection/pkg/tailf"
 )
 
 

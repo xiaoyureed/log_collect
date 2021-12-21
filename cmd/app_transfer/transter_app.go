@@ -2,10 +2,10 @@ package main
 
 import (
 	log "github.com/sirupsen/logrus"
-	"xiaoyureed.github.io/log_collection/es"
-	"xiaoyureed.github.io/log_collection/etcd"
-	"xiaoyureed.github.io/log_collection/global"
-	"xiaoyureed.github.io/log_collection/kafka"
+	"xiaoyureed.github.io/log_collection/pkg/es"
+	"xiaoyureed.github.io/log_collection/pkg/etcd"
+	"xiaoyureed.github.io/log_collection/pkg/global"
+	"xiaoyureed.github.io/log_collection/pkg/kafka"
 )
 
 func main() {

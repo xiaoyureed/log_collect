@@ -7,8 +7,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"strings"
 	"time"
-	"xiaoyureed.github.io/log_collection/etcd"
-	"xiaoyureed.github.io/log_collection/kafka"
+	"xiaoyureed.github.io/log_collection/pkg/etcd"
+	"xiaoyureed.github.io/log_collection/pkg/kafka"
 )
 
 type service struct {

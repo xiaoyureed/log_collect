@@ -8,9 +8,9 @@ import (
 	"sync"
 	"testing"
 	"time"
-	"xiaoyureed.github.io/log_collection/etcd"
-	"xiaoyureed.github.io/log_collection/global"
-	"xiaoyureed.github.io/log_collection/kafka"
+	"xiaoyureed.github.io/log_collection/pkg/etcd"
+	"xiaoyureed.github.io/log_collection/pkg/global"
+	"xiaoyureed.github.io/log_collection/pkg/kafka"
 )
 
 func TestSingle(t *testing.T) {
